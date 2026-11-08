@@ -1,92 +1,92 @@
 {
   "download": "https://opi.erik.xyz/download",
-  "version": "1.31.17",
+  "version": "1.31.18",
   "packages": {
     "windows-x64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/full/opi-1.31.17-windows-x64-full-setup.exe",
-        "size": 460877128,
+        "url": "https://opi.erik.xyz/download/v1.31.18/full/opi-1.31.18-windows-x64-full-setup.exe",
+        "size": null,
         "sha256": null
       },
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-windows-x64-setup.exe",
-        "size": 71984507,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-windows-x64-setup.exe",
+        "size": null,
         "sha256": null
       },
       "basic": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/basic/opi-1.31.17-windows-x64-basic-setup.exe",
-        "size": 70284596,
+        "url": "https://opi.erik.xyz/download/v1.31.18/basic/opi-1.31.18-windows-x64-basic-setup.exe",
+        "size": null,
         "sha256": null
       }
     },
     "linux-amd64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/full/opi-1.31.17-linux-amd64-full.deb",
-        "size": 491653870,
+        "url": "https://opi.erik.xyz/download/v1.31.18/full/opi-1.31.18-linux-amd64-full.deb",
+        "size": null,
         "sha256": null
       },
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-linux-amd64.deb",
-        "size": 102940072,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-linux-amd64.deb",
+        "size": null,
         "sha256": null
       },
       "basic": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/basic/opi-1.31.17-linux-amd64-basic.deb",
-        "size": 97097320,
+        "url": "https://opi.erik.xyz/download/v1.31.18/basic/opi-1.31.18-linux-amd64-basic.deb",
+        "size": null,
         "sha256": null
       }
     },
     "linux-x86_64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/full/opi-1.31.17-linux-x86_64-full.rpm",
-        "size": 491688581,
+        "url": "https://opi.erik.xyz/download/v1.31.18/full/opi-1.31.18-linux-x86_64-full.rpm",
+        "size": null,
         "sha256": null
       },
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-linux-x86_64.rpm",
-        "size": 102969864,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-linux-x86_64.rpm",
+        "size": null,
         "sha256": null
       },
       "basic": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/basic/opi-1.31.17-linux-x86_64-basic.rpm",
-        "size": 97127346,
+        "url": "https://opi.erik.xyz/download/v1.31.18/basic/opi-1.31.18-linux-x86_64-basic.rpm",
+        "size": null,
         "sha256": null
       }
     },
     "android": {
       "full": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/full/opi-1.31.17-android-universal-full.apk",
-        "size": 470741354,
+        "url": "https://opi.erik.xyz/download/v1.31.18/full/opi-1.31.18-android-universal-full.apk",
+        "size": null,
         "sha256": null
       },
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-android-universal.apk",
-        "size": 82625560,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-android-universal.apk",
+        "size": null,
         "sha256": null
       },
       "basic": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/basic/opi-1.31.17-android-universal-basic.apk",
-        "size": 64998637,
+        "url": "https://opi.erik.xyz/download/v1.31.18/basic/opi-1.31.18-android-universal-basic.apk",
+        "size": null,
         "sha256": null
       }
     },
     "macos-universal": {
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-macos-universal.pkg",
-        "size": 48048487,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-macos-universal.pkg",
+        "size": null,
         "sha256": null
       }
     },
     "ios": {
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-ios-unsigned.ipa",
-        "size": 32297550,
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-ios-unsigned.ipa",
+        "size": null,
         "sha256": null
       }
     },
     "harmony": {
       "normal": {
-        "url": "https://opi.erik.xyz/download/v1.31.17/normal/opi-1.31.17-harmonyos-unsigned.hap",
+        "url": "https://opi.erik.xyz/download/v1.31.18/normal/opi-1.31.18-harmonyos-unsigned.hap",
         "size": null,
         "sha256": null
       }
