@@ -4,10 +4,11 @@
 //! **高频词库 · 真库组**（2026-11-08）：`data/raw/high_freq.tsv` 走**导入词库**
 //! 通路（`engine_data::load_extra_dict`），不是编译进 .opid 的主库。
 //!
-//! 钉三件事：
+//! 钉四件事：
 //!   1. 六类合计 2800 条、注释头不进词条、3 列格式零坏行；
 //!   2. 代表性条目按普通话拼音可达（含方言单字、网络 ASCII 字面键）；
-//!   3. 词频列确实表达库内优先序（高频词语 > 方言），而不是同一个数。
+//!   3. 词频列确实表达库内优先序（高频词语 > 方言），而不是同一个数；
+//!   4. Android assets 与 fcitx5 部署副本都和 `data/raw/` 真源逐字节相同。
 //!
 //! 数据是项目自撰（词表 MIT）；高频字排序来自 Unihan kHanyuPinlu（Unicode
 //! License），逐源见 `data/raw/LICENSES.md`。
@@ -20,17 +21,23 @@ fn tsv_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/raw/high_freq.tsv")
 }
 
-/// Android 走 assets 副本（其余端构建期从 `data/raw/` 原样拷）：两份必须逐字节
-/// 相同，否则「入库数据」与「手机实际装载的数据」会静默漂开。
+/// Android 走 assets 副本，fcitx5 的 CI 容器编译吃 `crates/fcitx5-opi/data/` 副本
+/// （其余端构建期从 `data/raw/` 原样拷）：三份必须逐字节相同，否则「入库数据」与
+/// 「用户实际装载的数据」会静默漂开。
 #[test]
-fn android_asset_copy_is_byte_identical() {
-    let asset = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../android/app/src/main/assets/high_freq.tsv");
-    assert_eq!(
-        std::fs::read(&asset).expect("读 Android assets 副本"),
-        std::fs::read(tsv_path()).expect("读 data/raw 真源"),
-        "android/app/src/main/assets/high_freq.tsv 与 data/raw/high_freq.tsv 不一致"
-    );
+fn deployment_copies_are_byte_identical() {
+    let truth = std::fs::read(tsv_path()).expect("读 data/raw 真源");
+    for rel in [
+        "../../android/app/src/main/assets/high_freq.tsv",
+        "../../crates/fcitx5-opi/data/high_freq.tsv",
+    ] {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+        assert_eq!(
+            std::fs::read(&p).expect("读部署副本"),
+            truth,
+            "{rel} 与 data/raw/high_freq.tsv 不一致"
+        );
+    }
 }
 
 #[test]
